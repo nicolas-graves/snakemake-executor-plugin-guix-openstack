@@ -45,7 +45,8 @@ path. Its `origin` points at the GitHub URL in the package definition, SSH
 authentication works, and its branch and 0.1.0 tag are published. The sibling
 `snakemake-guix` branch and guix-ssh 0.2.0 tag are also published. Neither
 Python distribution is published on PyPI; the project currently targets the
-Guix channel workflow, as requested.
+Guix channel workflow, as requested. Both Guix channels lack authentication
+introductions; the user deferred OpenPGP channel authentication.
 
 The user deferred the live OVH steps. The OpenStack and SSH executor packages
 now propagate Python, so a Guix shell smoke check shows Snakemake discovering
