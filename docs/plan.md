@@ -1,6 +1,7 @@
 # Plan: snakemake-executor-plugin-guix-openstack
 
-Status: 0.2.0 release prepared, 2026-10-06. Part 1 is implemented in the
+Status: 0.2.0 plugin release and sibling-channel package published, 2026-10-06.
+Part 1 is implemented in the
 local `snakemake-guix` checkout, including the source-staging compatibility
 fix found during a live run; its executor suite passes (31 tests). This
 repository has the executor, worker OS procedure, reaper, and fake-cloud tests
@@ -38,11 +39,11 @@ record. The downloaded OpenRC was parsed into the local, Git-ignored
 fields and has mode 0600. SOPS remains deferred. Image
 upload, the b3-8 end-to-end runs, and the production profile also remain
 outstanding. This root checkout now has a
-signed initial commit and signed local
+signed initial commit and signed
 `snakemake-executor-plugin-guix-openstack-0.2.0` tag. A clean detached checkout
 builds the package and passes all 34 tests when given the sibling Guix channel
 path. Its `origin` points at the GitHub URL in the package definition, SSH
-authentication works, and its branch and 0.1.0 tag are published. The sibling
+authentication works, and its branch and 0.2.0 tag are published. The sibling
 `snakemake-guix` branch and guix-ssh 0.2.0 tag are also published. Neither
 Python distribution is published on PyPI; the project currently targets the
 Guix channel workflow, as requested. Both Guix channels lack authentication
