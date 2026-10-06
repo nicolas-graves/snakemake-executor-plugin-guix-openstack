@@ -36,14 +36,16 @@ outside the repository; it prompts for the password when sourced.
 record. The downloaded OpenRC was parsed into the local, Git-ignored
 `.secrets/openstack-credentials.json`; it is valid JSON containing 9 `OS_*`
 fields and has mode 0600. SOPS remains deferred. Image
-upload, publication of the guix-ssh 0.2.0 release, b3-8 end-to-end runs, and
-the production profile also remain outstanding. This root checkout now has a
+upload, the b3-8 end-to-end runs, and the production profile also remain
+outstanding. This root checkout now has a
 signed initial commit and signed local
 `snakemake-executor-plugin-guix-openstack-0.1.0` tag. A clean detached checkout
 builds the package and passes all 34 tests when given the sibling Guix channel
 path. Its `origin` points at the GitHub URL in the package definition, SSH
-authentication works, and the remote currently has no refs. Publication is
-pending review and approval.
+authentication works, and its branch and 0.1.0 tag are published. The sibling
+`snakemake-guix` branch and guix-ssh 0.2.0 tag are also published. Neither
+Python distribution is published on PyPI; the project currently targets the
+Guix channel workflow, as requested.
 
 The user deferred the live OVH steps. The OpenStack and SSH executor packages
 now propagate Python, so a Guix shell smoke check shows Snakemake discovering
@@ -388,22 +390,21 @@ Whether OVH serves each of them is what the spike checks.
 - cgdd-sevs-ecf adds this channel to `channels.scm` and the package to the
   manifest that provides its controller snakemake.
 
-Release check (2026-10-06): the upstream remote has the executor-specific
-`snakemake-executor-plugin-guix-ssh-0.1.0` tag, but not the required `0.2.0`
-tag. A signed local `snakemake-executor-plugin-guix-ssh-0.2.0` tag now points
-to commit `1d799bf`. Its Guix package builds from a fresh detached tagged
-checkout and runs all 31 executor tests. The separate repository tag named
-`0.2.0` only changes the root project version and does not contain the executor
-subtree, so it cannot satisfy this dependency. The root OpenStack package also
-builds against the tagged sibling source and passes all 34 tests. Publication
-of the sibling release remains pending review and approval; it is needed for
-consumers resolving the declared Python dependency outside Guix.
+Release check (2026-10-06): the upstream remote now has the executor-specific
+`snakemake-executor-plugin-guix-ssh-0.2.0` tag at commit `1d799bf`; its Guix
+package builds from a fresh detached tagged checkout and runs all 31 executor
+tests. The separate repository tag named `0.2.0` only changes the root project
+version and does not contain the executor subtree. The root OpenStack package
+builds against the tagged sibling source, including from a clean tagged
+checkout, and passes all 34 tests. The source tags are published to GitHub;
+neither project has a PyPI distribution, which remains outside the Guix-only
+package workflow.
 
 ## Order of work
 
 0. **Complete:** static guix-ssh workflow and pinned `guix copy` on vpsdae.
-1. **Local implementation complete; release candidate verified:** Part 1 and
-   tests in `snakemake-guix`; publish guix-ssh 0.2.0 after review.
+1. **Complete:** Part 1 and tests in `snakemake-guix`; the signed guix-ssh
+   0.2.0 tag is published on GitHub.
 2. **Deferred by user:** OVH b3-8 API and boot spike; adjust "SSH trust" from
    the results.
 3. **Local implementation complete; upload pending:** package skeleton and
