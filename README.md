@@ -17,6 +17,10 @@ Add the channel to a `channels.scm` file (the channel descriptor pulls in its
       %default-channels)
 ```
 
+The channel currently has no Guix authentication introduction, so Guix warns
+that it cannot authenticate the channel commits. Channel authentication is
+deferred.
+
 Pull the channel, then run Snakemake in a shell containing the package:
 
 ```sh
