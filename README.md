@@ -5,6 +5,29 @@ OpenStack worker for the whole invocation. It uses `guix-ssh` for Guix closure
 transfer, staging, execution, and output retrieval. The worker is created only
 when a remote job is submitted and is deleted during executor shutdown.
 
+## Use from Guix
+
+Add the channel to a `channels.scm` file (the channel descriptor pulls in its
+`snakemake-guix` dependency):
+
+```scheme
+(cons (channel
+       (name 'snakemake-executor-plugin-guix-openstack)
+       (url "https://github.com/nicolas-graves/snakemake-executor-plugin-guix-openstack"))
+      %default-channels)
+```
+
+Pull the channel, then run Snakemake in a shell containing the package:
+
+```sh
+guix pull --channels=channels.scm
+guix shell python-snakemake-executor-plugin-guix-openstack -- \
+  snakemake --executor guix-openstack --help
+```
+
+The package provides Snakemake, the executor, and its OpenStack SDK dependency.
+Use the workflow profile below when submitting jobs.
+
 ```yaml
 # profiles/ovh-b3-256/config.yaml
 executor: guix-openstack
