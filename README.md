@@ -125,17 +125,18 @@ entry; no secret belongs in the system configuration or job expression.
 
 ## Development
 
-Until guix-ssh 0.2.0 is released, use the sibling `snakemake-guix` checkout
-for its executor and deployment-plugin sources. From this repository root, run
-the Guix package build with:
+For local development, use the sibling `snakemake-guix` checkout for the
+executor and deployment-plugin sources. From this repository root, run the
+Guix package build with:
 
 ```sh
 guix build -L .guix/modules -L ../snakemake-guix/.guix/modules -f guix.scm
 ```
 
-The package definitions take filtered source snapshots from the two checkouts,
-so the build does not need published bootstrap tags. To confirm Snakemake
-discovers the package-built executor, run:
+The package definitions take filtered source snapshots from the two checkouts.
+The published `snakemake-executor-plugin-guix-ssh-0.2.0` tag also makes the
+dependency available through this channel's `snakemake-guix` dependency. To
+confirm Snakemake discovers the package-built executor, run:
 
 ```sh
 guix shell -L .guix/modules -L ../snakemake-guix/.guix/modules \
