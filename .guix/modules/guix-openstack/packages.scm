@@ -36,7 +36,7 @@
 (define-public python-snakemake-executor-plugin-guix-openstack
   (package
     (name "python-snakemake-executor-plugin-guix-openstack")
-    (version "0.1.0")
+    (version "0.2.0")
     (source
      (local-file "../../../" (git-file-name name version)
                  #:recursive? #t

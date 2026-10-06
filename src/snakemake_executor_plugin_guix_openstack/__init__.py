@@ -25,7 +25,8 @@ class ExecutorSettings(SshSettings):
     rules: list[str] = field(default_factory=list, metadata={"help": "Rule names allowed to run remotely", "required": True, "nargs": "+"})
     network: str = field(default="Ext-Net", metadata={"help": "OpenStack network for the worker"})
     cloud: Optional[str] = field(default=None, metadata={"help": "clouds.yaml entry (defaults to OS_* environment)"})
-    workdir: str = field(default="/var/tmp/snakemake-guix", metadata={"help": "Remote job root"})
+    workdir: str = field(default="/var/tmp", metadata={"help": "Remote job root"})
+    ssh_args: Optional[str] = field(default="-o ConnectTimeout=5 -o ConnectionAttempts=1", metadata={"help": "Additional SSH arguments"})
     boot_timeout: int = field(default=900, metadata={"help": "Seconds allowed for the worker to boot and accept SSH"})
     on_existing: str = field(default="fail", metadata={"help": "Policy for a live worker belonging to this workflow: fail, adopt, or delete"})
     keep: str = field(default="never", metadata={"help": "Keep the instance never, on-failure, or always (expiry still applies)"})
@@ -70,7 +71,7 @@ class Executor(GuixSSHExecutor):
         source = OpenStackHosts(
             settings,
             run_id=self.run_id,
-            workflow_path=str(Path(self.workflow.workdir or Path.cwd()).resolve()),
+            workflow_path=str(Path.cwd().resolve()),
             controller_host=socket.gethostname(),
             commands=self.commands,
         )
@@ -105,7 +106,7 @@ class Executor(GuixSSHExecutor):
         started = getattr(self.openstack_hosts, "started_at", None)
         if started is not None and time.monotonic() - started >= float(settings.max_hours) * 3600:
             raise WorkflowError("guix-openstack-max-hours elapsed; refusing to submit another job")
-        return super().run_job(job)
+        return GuixSSHExecutor._run_job(self, job)
 
     async def check_active_jobs(self, active_jobs):
         source = self.openstack_hosts

@@ -7,18 +7,18 @@ when a remote job is submitted and is deleted during executor shutdown.
 
 ## Use from Guix
 
-Add the channel to a `channels.scm` file (the channel descriptor pulls in its
-`snakemake-guix` dependency):
+The Guix package is maintained in the `snakemake-guix` channel alongside its
+`guix-ssh` dependency. Add that channel to `channels.scm`:
 
 ```scheme
 (cons (channel
-       (name 'snakemake-executor-plugin-guix-openstack)
-       (url "https://github.com/nicolas-graves/snakemake-executor-plugin-guix-openstack"))
+       (name 'snakemake-guix)
+       (url "https://github.com/nicolas-graves/snakemake-guix"))
       %default-channels)
 ```
 
 The channel currently has no Guix authentication introduction, so Guix warns
-that it cannot authenticate the channel commits. Channel authentication is
+that it cannot authenticate channel commits. Channel authentication is
 deferred.
 
 Pull the channel, then run Snakemake in a shell containing the package:
@@ -85,16 +85,25 @@ controller's public keys:
  #:signing-keys (list "/path/to/controller-signing-key.pub"))
 ```
 
-Save it as `worker-os.scm`, then build and upload it once:
+Save it as `worker-os.scm`, then build and publish a private, content-versioned
+Glance image. The image remains available after each temporary worker is
+deleted. Rebuilding the qcow2 produces a different image name and ID; update
+the executor profile to the returned ID after validation.
 
 ```sh
 image=$(guix system image \
   -L .guix/modules \
   -L ../snakemake-guix/.guix/modules \
   --image-type=qcow2 --image-size=14G worker-os.scm)
-openstack image create guix-worker --disk-format qcow2 \
-  --container-format bare --file "$image"
+guix shell python-snakemake-executor-plugin-guix-openstack -- \
+  snakemake-guix-openstack-image ensure --file "$image" \
+    --name-prefix guix-worker --region GRA11
 ```
+
+The command prints the Glance image ID on stdout. Put that exact ID in
+`guix-openstack-image`; keep the selected OpenStack region aligned with the
+image's region (for example, `OS_REGION_NAME=GRA11`). The executor never
+uploads an image during a workflow run.
 
 See [`worker.scm`](.guix/modules/guix-openstack/worker.scm) for the OS
 procedure.

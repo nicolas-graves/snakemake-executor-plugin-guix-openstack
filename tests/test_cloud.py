@@ -8,13 +8,20 @@ from snakemake_executor_plugin_guix_openstack.cloud import OpenStackCloud
 
 class CloudAdapterTests(unittest.TestCase):
     def setUp(self):
+        class ResourceNotFound(Exception):
+            pass
+
+        self.ResourceNotFound = ResourceNotFound
         self.compute = Mock()
         self.image = Mock()
         self.network = Mock()
         self.connection = Mock(compute=self.compute, image=self.image, network=self.network)
         self.connect = Mock(return_value=self.connection)
         self.patch_openstack = patch.dict(
-            "sys.modules", {"openstack": SimpleNamespace(connect=self.connect)}
+            "sys.modules", {
+                "openstack": SimpleNamespace(connect=self.connect),
+                "openstack.exceptions": SimpleNamespace(ResourceNotFound=ResourceNotFound),
+            }
         )
         self.patch_openstack.start()
         self.addCleanup(self.patch_openstack.stop)
@@ -82,12 +89,38 @@ class CloudAdapterTests(unittest.TestCase):
             "server-id", ignore_missing=True
         )
 
+    def test_get_server_returns_none_only_for_not_found(self):
+        cloud = OpenStackCloud()
+        self.compute.get_server.side_effect = self.ResourceNotFound("gone")
+        self.assertIsNone(cloud.get_server("server-id"))
+        self.compute.get_server.side_effect = RuntimeError("API unavailable")
+        with self.assertRaisesRegex(RuntimeError, "API unavailable"):
+            cloud.get_server("server-id")
+
     def test_images_and_networks_use_their_own_service_proxies(self):
         cloud = OpenStackCloud()
         cloud.find_image("image-name")
         cloud.find_network("Ext-Net")
         self.image.find_image.assert_called_once_with("image-name")
         self.network.find_network.assert_called_once_with("Ext-Net")
+
+    def test_glance_operations_and_region_are_delegated(self):
+        self.connection.session = Mock()
+        self.connection.session.get_project_id.return_value = "project-id"
+        self.connection.config = Mock()
+        self.connection.config.get_region_name.return_value = "GRA11"
+        self.image.images.return_value = ["candidate"]
+        self.image.get_image.return_value = "fresh"
+        self.image.create_image.return_value = "created"
+        cloud = OpenStackCloud("ovh", region_name="GRA11")
+        self.connect.assert_called_once_with(cloud="ovh", region_name="GRA11")
+        self.assertEqual(cloud.image_scope(), ("project-id", "GRA11"))
+        self.assertEqual(cloud.list_images(name="worker"), ["candidate"])
+        self.image.images.assert_called_once_with(name="worker")
+        self.assertEqual(cloud.get_image("image-id"), "fresh")
+        self.image.get_image.assert_called_once_with("image-id")
+        self.assertEqual(cloud.create_image(name="worker"), "created")
+        self.image.create_image.assert_called_once_with(name="worker")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Plan: snakemake-executor-plugin-guix-openstack
 
-Status: implementation in progress, 2026-10-06. Part 1 is implemented in the
+Status: 0.2.0 release prepared, 2026-10-06. Part 1 is implemented in the
 local `snakemake-guix` checkout, including the source-staging compatibility
 fix found during a live run; its executor suite passes (31 tests). This
 repository has the executor, worker OS procedure, reaper, and fake-cloud tests
@@ -39,7 +39,7 @@ fields and has mode 0600. SOPS remains deferred. Image
 upload, the b3-8 end-to-end runs, and the production profile also remain
 outstanding. This root checkout now has a
 signed initial commit and signed local
-`snakemake-executor-plugin-guix-openstack-0.1.0` tag. A clean detached checkout
+`snakemake-executor-plugin-guix-openstack-0.2.0` tag. A clean detached checkout
 builds the package and passes all 34 tests when given the sibling Guix channel
 path. Its `origin` points at the GitHub URL in the package definition, SSH
 authentication works, and its branch and 0.1.0 tag are published. The sibling
@@ -225,7 +225,7 @@ checkout, so neither package recipe needs a bootstrap source hash.
 | `rules` | required | Allowlist of rule names that may go remote. |
 | `network` | `Ext-Net` | OVH public network. |
 | `cloud` | unset | `clouds.yaml` entry; unset means `OS_*` env. |
-| `workdir` | `/var/tmp/snakemake-guix` | Remote job root. |
+| `workdir` | `/var/tmp` | Existing writable remote job root; run and job IDs isolate each job. |
 | `boot-timeout` | 900 s | From create to host key on console + ssh up. |
 | `on-existing` | `fail` | `fail`, `adopt` or `delete` a live instance of the same workflow. |
 | `keep` | `never` | `never`, `on-failure`, `always`. The expiry still applies. |
@@ -330,6 +330,9 @@ Rejected: in-instance self-destruct. Halting doesn't stop OVH billing, and
 deleting from inside needs OpenStack credentials on the worker.
 
 ### Worker image
+
+The API-based, one-time Glance publication and immutable image reuse work is
+specified in [plan-glance-image-publication.md](plan-glance-image-publication.md).
 
 A Guix System image with: sshd (key-only root, the controller's key), the host
 key console service, guix-daemon authorising the controller's signing key (for

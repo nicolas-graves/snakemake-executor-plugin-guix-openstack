@@ -127,6 +127,37 @@ class OpenStackHostsTests(unittest.TestCase):
         self.assertEqual(self.cloud.servers, [])
         self.assertEqual(self.commands.host_options, {})
 
+    def test_acquire_tries_second_ipv4_with_pinned_host_key(self):
+        original_wait_for_server = self.cloud.wait_for_server
+
+        def wait_for_server(server, *, timeout):
+            server["addresses"]["Ext-Net"] = [
+                {"version": 4, "addr": "192.0.2.1"},
+                {"version": 4, "addr": "192.0.2.2"},
+            ]
+            return original_wait_for_server(server, timeout=timeout)
+
+        self.cloud.wait_for_server = wait_for_server
+        attempts = []
+
+        def ssh(host, command):
+            address, known_hosts_path = self.commands.host_options[host.hostname]
+            attempts.append(address)
+            if address == "192.0.2.1":
+                raise CommandError("timed out")
+            self.assertIn(
+                f"{address} ssh-ed25519 AAAATEST",
+                Path(known_hosts_path).read_text(),
+            )
+
+        self.commands.ssh = ssh
+        hosts = self.source.acquire()
+        self.assertEqual(attempts, ["192.0.2.1", "192.0.2.2"])
+        self.assertEqual(self.commands.host_options[hosts[0].hostname][0], "192.0.2.2")
+        self.assertIn("HostName 192.0.2.2", self.source.ssh_config.config_path.read_text())
+        self.assertNotIn("192.0.2.1", self.source.ssh_config.known_hosts_path.read_text())
+        self.source.release(hosts, failed=False)
+
     def test_release_without_any_remote_job_does_not_create_a_cloud_connection(self):
         self.source.cloud = None
         self.source.release([], failed=False)
@@ -206,7 +237,6 @@ class OpenStackHostsTests(unittest.TestCase):
         server = self.cloud.servers[0]
         self.cloud.delete_server = lambda server_id: self.cloud.deletes.append(server_id)
         self.cloud.wait_for_delete = lambda server, *, timeout: None
-        self.cloud.list_servers = lambda: [server]
         self.cloud.close_error = RuntimeError("connection close failed")
         with self.assertRaisesRegex(RuntimeError, "openstack server delete server-id"):
             self.source.release(hosts, failed=False)
@@ -214,6 +244,33 @@ class OpenStackHostsTests(unittest.TestCase):
         self.assertFalse(self.source.ssh_config.known_hosts_path.exists())
         self.assertEqual(self.commands.host_options, {})
         self.assertTrue(self.cloud.closed)
+
+    def test_release_ignores_stale_server_list_after_direct_get_is_gone(self):
+        hosts = self.source.acquire()
+        stale = self.cloud.servers[0]
+        self.cloud.list_servers = lambda: [stale]
+        self.source.release(hosts, failed=False)
+        self.assertEqual(self.cloud.deletes, ["server-id"])
+        self.assertEqual(self.source.server_ids, set())
+
+    def test_release_retries_direct_get_until_server_is_gone(self):
+        hosts = self.source.acquire()
+        stale = self.cloud.servers[0]
+        original_get_server = self.cloud.get_server
+        reads_after_delete = 0
+
+        def get_server(server_id):
+            nonlocal reads_after_delete
+            if self.cloud.deletes:
+                reads_after_delete += 1
+                if reads_after_delete == 1:
+                    return stale
+            return original_get_server(server_id)
+
+        self.cloud.get_server = get_server
+        self.source.release(hosts, failed=False)
+        self.assertEqual(reads_after_delete, 2)
+        self.assertEqual(self.source.server_ids, set())
 
     def test_quota_preflight_happens_before_create(self):
         self.cloud.limits = lambda: {"absolute": {

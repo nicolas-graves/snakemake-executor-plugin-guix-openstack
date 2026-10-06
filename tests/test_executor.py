@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -36,6 +37,8 @@ def test_executor_settings_include_inherited_ssh_safety_defaults(tmp_path):
     assert config.transfer_concurrency == 2
     assert config.unreachable_timeout == 600
     assert config.rules == ["expensive"]
+    assert config.workdir == "/var/tmp"
+    assert config.ssh_args == "-o ConnectTimeout=5 -o ConnectionAttempts=1"
 
 
 def test_executor_settings_reject_negative_unreachable_timeout(tmp_path):
@@ -50,6 +53,29 @@ def test_openstack_jobs_source_the_worker_system_profile(tmp_path):
     assert "/run/current-system/profile/lib/python*/site-packages" in prefix
     assert 'PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$site_packages"' in prefix
     assert prefix.endswith("export PYTHONPATH")
+
+
+def test_host_source_uses_effective_workdir_when_workflow_workdir_is_a_method(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    captured = {}
+
+    def host_source(*args, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        "snakemake_executor_plugin_guix_openstack.OpenStackHosts", host_source
+    )
+    executor = Executor.__new__(Executor)
+    executor.workflow = SimpleNamespace(workdir=lambda value: None)
+    executor.run_id = "test-run"
+    executor.commands = object()
+
+    Executor.make_host_source(executor, settings(tmp_path / "identity"))
+
+    assert captured["workflow_path"] == str(Path.cwd())
 
 
 def test_unallowlisted_rule_fails_before_any_host_validation(tmp_path):
@@ -78,6 +104,29 @@ def test_missing_identity_fails_before_cloud_preflight(tmp_path):
     with pytest.raises(WorkflowError, match="identity file does not exist"):
         executor.run_job(job())
     assert not source.validated
+
+
+def test_allowed_job_dispatches_to_ssh_implementation_once(tmp_path, monkeypatch):
+    identity = tmp_path / "identity"
+    identity.write_text("private-key-placeholder")
+
+    class Source:
+        started_at = None
+
+        def validate_job(self, job):
+            pass
+
+    executor = bare_executor(settings(identity), Source())
+    executor._hosts = lambda: [object()]
+    calls = []
+    monkeypatch.setattr(
+        "snakemake_executor_plugin_guix_openstack.GuixSSHExecutor._run_job",
+        lambda self, job: calls.append(job) or "submitted",
+    )
+    selected = job()
+
+    assert executor.run_job(selected) == "submitted"
+    assert calls == [selected]
 
 
 def test_flavor_rejection_is_reported_before_base_executor_submission(tmp_path):

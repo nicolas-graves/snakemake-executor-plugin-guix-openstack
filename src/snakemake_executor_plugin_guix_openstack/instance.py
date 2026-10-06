@@ -239,39 +239,53 @@ class OpenStackHosts:
         server_id = str(_field(server, "id"))
         while self.clock() < deadline:
             server = cloud.get_server(server_id)
-            address = self._address(server)
-            if address:
+            addresses = self._addresses(server)
+            if addresses:
                 try:
                     key = parse_console_host_key(cloud.console_output(server_id))
-                    alias = f"sgo-{self.run8}"
-                    self.ssh_config.add(alias, address, self.settings.identity_file, key)
-                    self.commands.set_host_options(
-                        alias,
-                        address=address,
-                        known_hosts=str(self.ssh_config.known_hosts_path),
-                    )
-                    host = Host(alias, 22, PurePosixPath(self.settings.workdir))
-                    self.commands.ssh(host, "true")
-                    return host
                 except (CommandError, ValueError, OSError, TimeoutError) as error:
-                    LOG.debug("waiting for worker SSH (%s): %s", server_id, error)
+                    LOG.debug("waiting for worker host key (%s): %s", server_id, error)
+                    self.sleep(2)
+                    continue
+                alias = f"sgo-{self.run8}"
+                host = Host(alias, 22, PurePosixPath(self.settings.workdir))
+                for address in addresses:
+                    registered = False
+                    try:
+                        self.ssh_config.add(alias, address, self.settings.identity_file, key)
+                        registered = True
+                        self.commands.set_host_options(
+                            alias,
+                            address=address,
+                            known_hosts=str(self.ssh_config.known_hosts_path),
+                        )
+                        self.commands.ssh(host, "true")
+                        return host
+                    except (CommandError, ValueError, OSError, TimeoutError) as error:
+                        LOG.debug("waiting for worker SSH (%s, %s): %s", server_id, address, error)
+                        self.commands.clear_host_options(alias)
+                        if registered:
+                            self.ssh_config.remove(alias)
             self.sleep(2)
         raise TimeoutError(
             f"worker {server_id} did not publish its host key and accept SSH "
             f"within {self.settings.boot_timeout} seconds"
         )
 
-    def _address(self, server):
+    def _addresses(self, server):
         addresses = _field(server, "addresses", {}) or {}
-        network = addresses.get(self.settings.network, [])
-        for address in network:
-            if _field(address, "version") == 4:
-                return _field(address, "addr")
-        for candidates in addresses.values():
+        networks = [addresses.get(self.settings.network, [])]
+        networks.extend(
+            candidates for name, candidates in addresses.items()
+            if name != self.settings.network
+        )
+        result = []
+        for candidates in networks:
             for address in candidates:
-                if _field(address, "version") == 4:
-                    return _field(address, "addr")
-        return None
+                value = _field(address, "addr")
+                if str(_field(address, "version")) == "4" and value and value not in result:
+                    result.append(value)
+        return result
 
     def _expiry(self):
         return (self.utcnow() + timedelta(hours=float(self.settings.max_hours), minutes=15))\
@@ -345,8 +359,12 @@ class OpenStackHosts:
                     continue
                 cloud.delete_server(server_id)
                 cloud.wait_for_delete(server, timeout=DELETE_TIMEOUT)
-                if any(str(_field(item, "id")) == server_id for item in cloud.list_servers()):
-                    raise RuntimeError("server remained visible after wait_for_delete")
+                for attempt in range(5):
+                    if cloud.get_server(server_id) is None:
+                        break
+                    if attempt == 4:
+                        raise RuntimeError("server still exists after wait_for_delete")
+                    self.sleep(1)
                 self.server_ids.discard(server_id)
             except BaseException as error:
                 failures.append((server_id, error))
